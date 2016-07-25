@@ -10,8 +10,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import time
-
 from selenium.webdriver.common import by
 
 from openstack_dashboard.test.integration_tests.pages import basepage
@@ -23,25 +21,19 @@ class ChangepasswordPage(basepage.BaseNavigationPage):
         _password_form_locator = (by.By.ID, 'change_password_modal')
 
         CHANGE_PASSWORD_FORM_FIELDS = ("current_password", "new_password",
-                                       "confirm_password")
+                                       "confirm_new_password")
 
         @property
         def password_form(self):
             src_elem = self._get_element(*self._password_form_locator)
-            return forms.FormRegion(
-                self.driver, self.conf, src_elem=src_elem,
-                field_mappings=self.CHANGE_PASSWORD_FORM_FIELDS)
+            return forms.FormRegion(self.driver, self.conf, src_elem,
+                                    self.CHANGE_PASSWORD_FORM_FIELDS)
 
         def change_password(self, current, new):
             self.password_form.current_password.text = current
             self.password_form.new_password.text = new
-            self.password_form.confirm_password.text = new
-            self.password_form.submit()
-            # NOTE(tsufiev): try to apply the same fix as Tempest did for the
-            # issue of Keystone Fernet tokens lacking sub-second precision
-            # (in which case it's possible to log in the same second that
-            # token was revoked due to password change), see bug 1473567
-            time.sleep(1)
+            self.password_form.confirm_new_password.text = new
+            self.password_form.submit.click()
 
         def reset_to_default_password(self, current):
             if self.topbar.user.text == self.conf.identity.admin_username:

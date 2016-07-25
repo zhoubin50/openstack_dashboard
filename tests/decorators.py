@@ -91,7 +91,7 @@ def services_required(*req_services):
                 raise ValueError(NOT_TEST_OBJECT_ERROR_MSG)
             skip_method = _mark_class_skipped
         else:
-            if not _is_test_method_name(obj.__name__):
+            if not _is_test_method_name(obj.func_name):
                 raise ValueError(NOT_TEST_OBJECT_ERROR_MSG)
             skip_method = _mark_method_skipped
         # get available services from configuration
@@ -125,7 +125,7 @@ def skip_because(**kwargs):
                 raise ValueError(NOT_TEST_OBJECT_ERROR_MSG)
             skip_method = _mark_class_skipped
         else:
-            if not _is_test_method_name(obj.__name__):
+            if not _is_test_method_name(obj.func_name):
                 raise ValueError(NOT_TEST_OBJECT_ERROR_MSG)
             skip_method = _mark_method_skipped
         bugs = kwargs.get("bugs")
@@ -137,15 +137,3 @@ def skip_because(**kwargs):
                               ", ".join([bug for bug in bugs]))
         return obj
     return actual_decoration
-
-
-def attach_video(func):
-    """Notify test runner to attach test video in any case
-    """
-
-    @functools.wraps(func)
-    def wrapper(self, *args, **kwgs):
-        self._need_attach_video = True
-        return func(self, *args, **kwgs)
-
-    return wrapper

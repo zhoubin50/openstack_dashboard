@@ -9,9 +9,21 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-from openstack_dashboard.test.integration_tests.pages.project.compute \
-    import imagespage
+
+from openstack_dashboard.test.integration_tests import helpers
 
 
-class ImagesPage(imagespage.ImagesPage):
-    pass
+class TestDashboardHelp(helpers.TestCase):
+
+    def test_dashboard_help_redirection(self):
+        """Verifies Help link redirects to the right URL."""
+
+        self.home_pg.go_to_help_page()
+        self.home_pg.switch_window()
+
+        self.assertEqual(self.CONFIG.dashboard.help_url,
+                         self.home_pg.get_url_current_page(),
+                         "help link did not redirect to the right URL")
+
+        self.home_pg.close_window()
+        self.home_pg.switch_window()

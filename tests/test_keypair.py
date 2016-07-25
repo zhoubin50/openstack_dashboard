@@ -14,25 +14,20 @@
 #    under the License.
 
 from openstack_dashboard.test.integration_tests import helpers
-from openstack_dashboard.test.integration_tests.regions import messages
+from openstack_dashboard.test.integration_tests.tests import decorators
 
 
+@decorators.skip_because(bugs=["1467950"])
 class TestKeypair(helpers.TestCase):
     """Checks that the user is able to create/delete keypair."""
     KEYPAIR_NAME = helpers.gen_random_resource_name("keypair")
 
     def test_keypair(self):
-        keypair_page = self.home_pg.\
-            go_to_compute_accessandsecurity_keypairspage()
+        keypair_page = self.home_pg.go_to_accessandsecurity_keypairspage()
         keypair_page.create_keypair(self.KEYPAIR_NAME)
-        self.assertFalse(keypair_page.find_message_and_dismiss(messages.ERROR))
 
-        keypair_page = self.home_pg.\
-            go_to_compute_accessandsecurity_keypairspage()
+        keypair_page = self.home_pg.go_to_accessandsecurity_keypairspage()
         self.assertTrue(keypair_page.is_keypair_present(self.KEYPAIR_NAME))
 
         keypair_page.delete_keypair(self.KEYPAIR_NAME)
-        self.assertTrue(
-            keypair_page.find_message_and_dismiss(messages.SUCCESS))
-        self.assertFalse(keypair_page.find_message_and_dismiss(messages.ERROR))
         self.assertFalse(keypair_page.is_keypair_present(self.KEYPAIR_NAME))
