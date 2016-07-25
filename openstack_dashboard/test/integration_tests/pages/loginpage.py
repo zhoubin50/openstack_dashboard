@@ -1,3 +1,4 @@
+# coding:utf-8
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -29,7 +30,7 @@ class LoginPage(pageobject.PageObject):
 
     def __init__(self, driver, conf):
         super(LoginPage, self).__init__(driver, conf)
-        self._page_title = "Login"
+        self._page_title = u"登录 - OpenStack Dashboard"
 
     def is_login_page(self):
         return (self.is_the_current_page() and
