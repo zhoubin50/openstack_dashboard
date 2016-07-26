@@ -9,8 +9,6 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-import types
-
 from openstack_dashboard.test.integration_tests import basewebobject
 
 
@@ -32,11 +30,9 @@ class BaseRegion(basewebobject.BaseWebObject):
     # private methods
     def __init__(self, driver, conf, src_elem=None):
         super(BaseRegion, self).__init__(driver, conf)
-        if src_elem is None and self._default_src_locator:
-            # fake self.src_elem must be set up in
-            # order self._get_element work
-            self.src_elem = driver
-            src_elem = self._get_element(*self._default_src_locator)
+        if self._default_src_locator:
+            root = src_elem or driver
+            src_elem = root.find_element(*self._default_src_locator)
 
         self.src_elem = src_elem or driver
 
@@ -56,46 +52,10 @@ class BaseRegion(basewebobject.BaseWebObject):
         is created, which is one of the requirement of page object pattern.
         """
         try:
-            return self._dynamic_properties[name]()
+            return self._dynamic_properties[name]
         except KeyError:
             msg = "'{0}' object has no attribute '{1}'"
             raise AttributeError(msg.format(type(self).__name__, name))
-
-    # protected methods and classes
-    class _DynamicProperty(object):
-        """Serves as new property holder."""
-
-        def __init__(self, method, index=None):
-            """In case object was created with index != None,
-            it is assumed that the result of self.method should be tuple()
-            and just certain index should be returned
-            """
-            self.method = method
-            self.index = index
-
-        def __call__(self, *args, **kwargs):
-            result = self.method()
-            return result if self.index is None else result[self.index]
-
-    def _init_dynamic_properties(self, new_attr_names, method):
-        """Create new object's 'properties' at runtime."""
-        for index, new_attr_name in enumerate(new_attr_names):
-            self._init_dynamic_property(new_attr_name, method, index)
-
-    def _init_dynamic_property(self, new_attr_name, method, index=None):
-        """Create new object's property at runtime. If index argument is
-        supplied it is assumed that method returns tuple() and only element
-        on ${index} position is returned.
-        """
-        if (new_attr_name in dir(self) or
-                new_attr_name in self._dynamic_properties):
-            raise AttributeError("%s class has already attribute %s."
-                                 "The new property could not be "
-                                 "created." % (self.__class__.__name__,
-                                               new_attr_name))
-        new_method = self.__class__._DynamicProperty(method, index)
-        inst_method = types.MethodType(new_method, self)
-        self._dynamic_properties[new_attr_name] = inst_method
 
     def _get_element(self, *locator):
         return self.src_elem.find_element(*locator)

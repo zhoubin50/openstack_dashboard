@@ -13,44 +13,50 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from selenium.webdriver.common import by
-
 from openstack_dashboard.test.integration_tests.pages import basepage
 from openstack_dashboard.test.integration_tests.regions import forms
 from openstack_dashboard.test.integration_tests.regions import tables
 
 
+class KeypairsTable(tables.TableRegion):
+    name = "keypairs"
+    CREATE_KEY_PAIR_FORM_FIELDS = ('name',)
+
+    @tables.bind_table_action('create')
+    def create_keypair(self, create_button):
+        create_button.click()
+        return forms.FormRegion(
+            self.driver, self.conf,
+            field_mappings=self.CREATE_KEY_PAIR_FORM_FIELDS)
+
+    @tables.bind_row_action('delete')
+    def delete_keypair(self, delete_button, row):
+        delete_button.click()
+        return forms.BaseFormRegion(self.driver, self.conf)
+
+    @tables.bind_table_action('delete')
+    def delete_keypairs(self, delete_button):
+        delete_button.click()
+        return forms.BaseFormRegion(self.driver, self.conf)
+
+
 class KeypairsPage(basepage.BaseNavigationPage):
 
-    _key_pairs_table_locator = (by.By.ID, 'keypairs')
-
-    KEY_PAIRS_TABLE_ACTIONS = ("create_key_pair", "import_key_pair",
-                               "delete_key_pair")
-    KEY_PAIRS_TABLE_ROW_ACTION = "delete_key_pair"
-    KEY_PAIRS_TABLE_NAME_COLUMN_INDEX = 0
-
-    CREATE_KEY_PAIR_FORM_FIELDS = ('name',)
+    KEY_PAIRS_TABLE_ACTIONS = ("create", "import", "delete")
+    KEY_PAIRS_TABLE_ROW_ACTION = "delete"
+    KEY_PAIRS_TABLE_NAME_COLUMN = 'name'
 
     def __init__(self, driver, conf):
         super(KeypairsPage, self).__init__(driver, conf)
         self._page_title = "Access & Security"
 
     def _get_row_with_keypair_name(self, name):
-        return self.keypairs_table.get_row(
-            self.KEY_PAIRS_TABLE_NAME_COLUMN_INDEX, name)
+        return self.keypairs_table.get_row(self.KEY_PAIRS_TABLE_NAME_COLUMN,
+                                           name)
 
     @property
     def keypairs_table(self):
-        src_elem = self._get_element(*self._key_pairs_table_locator)
-        return tables.SimpleActionsTableRegion(self.driver, self.conf,
-                                               src_elem,
-                                               self.KEY_PAIRS_TABLE_ACTIONS,
-                                               self.KEY_PAIRS_TABLE_ROW_ACTION)
-
-    @property
-    def create_keypair_form(self):
-        return forms.FormRegion(self.driver, self.conf, None,
-                                self.CREATE_KEY_PAIR_FORM_FIELDS)
+        return KeypairsTable(self.driver, self.conf)
 
     @property
     def delete_keypair_form(self):
@@ -60,10 +66,17 @@ class KeypairsPage(basepage.BaseNavigationPage):
         return bool(self._get_row_with_keypair_name(name))
 
     def create_keypair(self, keypair_name):
-        self.keypairs_table.create_key_pair.click()
-        self.create_keypair_form.name.text = keypair_name
-        self.create_keypair_form.submit.click()
+        create_keypair_form = self.keypairs_table.create_keypair()
+        create_keypair_form.name.text = keypair_name
+        create_keypair_form.submit()
 
     def delete_keypair(self, name):
-        self._get_row_with_keypair_name(name).delete_key_pair.click()
-        self.delete_keypair_form.submit.click()
+        row = self._get_row_with_keypair_name(name)
+        delete_keypair_form = self.keypairs_table.delete_keypair(row)
+        delete_keypair_form.submit()
+
+    def delete_keypairs(self, name):
+        row = self._get_row_with_keypair_name(name)
+        row.mark()
+        delete_keypair_form = self.keypairs_table.delete_keypairs()
+        delete_keypair_form.submit()

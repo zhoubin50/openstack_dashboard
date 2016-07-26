@@ -10,33 +10,49 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import six.moves.urllib.parse as urlparse
+
 from openstack_dashboard.test.integration_tests import basewebobject
 
 
 class PageObject(basewebobject.BaseWebObject):
     """Base class for page objects."""
 
+    PARTIAL_LOGIN_URL = 'auth/login'
+
     def __init__(self, driver, conf):
         """Constructor."""
         super(PageObject, self).__init__(driver, conf)
-        self.login_url = self.conf.dashboard.login_url
         self._page_title = None
 
     @property
     def page_title(self):
         return self.driver.title
 
-    def is_the_current_page(self):
-        self.assertIn(self._page_title, self.page_title,
-                      "Expected to find %s in page title, instead found: %s"
-                      % (self._page_title, self.page_title))
-        return True
+    def is_the_current_page(self, do_assert=False):
+        found_expected_title = self.page_title.startswith(self._page_title)
+        if do_assert:
+            self.assertTrue(
+                found_expected_title,
+                "Expected to find %s in page title, instead found: %s"
+                % (self._page_title, self.page_title))
+        return found_expected_title
+
+    @property
+    def login_url(self):
+        base_url = self.conf.dashboard.dashboard_url
+        if not base_url.endswith('/'):
+            base_url += '/'
+        return urlparse.urljoin(base_url, self.PARTIAL_LOGIN_URL)
 
     def get_url_current_page(self):
         return self.driver.current_url
 
     def close_window(self):
         return self.driver.close()
+
+    def is_nth_window_opened(self, n):
+        return len(self.driver.window_handles) == n
 
     def switch_window(self, window_name=None, window_index=None):
         """Switches focus between the webdriver windows.
@@ -74,4 +90,4 @@ class PageObject(basewebobject.BaseWebObject):
 
     def go_to_login_page(self):
         self.driver.get(self.login_url)
-        self.is_the_current_page()
+        self.is_the_current_page(do_assert=True)

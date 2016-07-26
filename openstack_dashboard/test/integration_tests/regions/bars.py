@@ -17,8 +17,15 @@ from openstack_dashboard.test.integration_tests.regions import menus
 
 
 class TopBarRegion(baseregion.BaseRegion):
-    _user_dropdown_menu_locator = (by.By.ID, 'profile_editor_switcher')
+    _user_dropdown_menu_locator = (by.By.CSS_SELECTOR,
+                                   '.nav.navbar-nav.navbar-right')
     _openstack_brand_locator = (by.By.CSS_SELECTOR, 'a[href*="/home/"]')
+
+    _user_dropdown_project_locator = (
+        by.By.CSS_SELECTOR, '.navbar-collapse > ul.navbar-nav:first-child')
+    _header_locator = (by.By.CSS_SELECTOR, 'nav.navbar-fixed-top')
+
+    MATERIAL_THEME_CLASS = 'material-header'
 
     @property
     def user(self):
@@ -29,6 +36,15 @@ class TopBarRegion(baseregion.BaseRegion):
         return self._get_element(*self._openstack_brand_locator)
 
     @property
+    def header(self):
+        return self._get_element(*self._header_locator)
+
+    @property
+    def is_material_theme_enabled(self):
+        classes = self.header.get_attribute('class').strip().split()
+        return self.MATERIAL_THEME_CLASS in classes
+
+    @property
     def user_dropdown_menu(self):
         src_elem = self._get_element(*self._user_dropdown_menu_locator)
         return menus.UserDropDownMenuRegion(self.driver,
@@ -37,3 +53,9 @@ class TopBarRegion(baseregion.BaseRegion):
     @property
     def is_logged_in(self):
         return self._is_element_visible(*self._user_dropdown_menu_locator)
+
+    @property
+    def user_dropdown_project(self):
+        src_elem = self._get_element(*self._user_dropdown_project_locator)
+        return menus.ProjectDropDownRegion(self.driver,
+                                           self.conf, src_elem)

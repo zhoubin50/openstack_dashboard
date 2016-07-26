@@ -9,13 +9,14 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+import collections
 import six
 
+from selenium.common import exceptions
 from selenium.webdriver.common import by
 import selenium.webdriver.support.ui as Support
 
 from openstack_dashboard.test.integration_tests.regions import baseregion
-from openstack_dashboard.test.integration_tests.regions import exceptions
 from openstack_dashboard.test.integration_tests.regions import menus
 
 
@@ -23,12 +24,19 @@ class FieldFactory(baseregion.BaseRegion):
     """Factory for creating form field objects."""
 
     FORM_FIELDS_TYPES = set()
+    _element_locator_str_prefix = 'div.form-group'
 
-    def make_form_field(self):
-        for form_type in self.FORM_FIELDS_TYPES:
-            if self._is_element_present(*form_type._element_locator):
-                return form_type(self.driver, self.conf, self.src_elem)
-        raise exceptions.UnknownFormFieldTypeException()
+    def __init__(self, driver, conf, src_elem=None):
+        super(FieldFactory, self).__init__(driver, conf, src_elem)
+
+    def fields(self):
+        for field_cls in self.FORM_FIELDS_TYPES:
+            locator = (by.By.CSS_SELECTOR,
+                       '%s %s' % (self._element_locator_str_prefix,
+                                  field_cls._element_locator_str_suffix))
+            elements = super(FieldFactory, self)._get_elements(*locator)
+            for element in elements:
+                yield field_cls(self.driver, self.conf, src_elem=element)
 
     @classmethod
     def register_field_cls(cls, field_class, base_classes=None):
@@ -62,7 +70,11 @@ class BaseFormFieldRegion(baseregion.BaseRegion):
 
     @property
     def element(self):
-        return self._get_element(*self._element_locator)
+        return self.src_elem
+
+    @property
+    def name(self):
+        return self.element.get_attribute('name')
 
     def is_required(self):
         classes = self.driver.get_attribute('class')
@@ -72,28 +84,36 @@ class BaseFormFieldRegion(baseregion.BaseRegion):
         return self.element.is_displayed()
 
 
-class CheckBoxFormFieldRegion(BaseFormFieldRegion):
-    """Checkbox field."""
+class CheckBoxMixin(object):
 
-    _element_locator = (by.By.CSS_SELECTOR,
-                        'div > label > input[type=checkbox]')
+    @property
+    def label(self):
+        id_attribute = self.element.get_attribute('id')
+        return self.element.find_element(
+            by.By.XPATH, '../..//label[@for="{}"]'.format(id_attribute))
 
     def is_marked(self):
         return self.element.is_selected()
 
     def mark(self):
         if not self.is_marked():
-            self.element.click()
+            self.label.click()
 
     def unmark(self):
         if self.is_marked():
-            self.element.click()
+            self.label.click()
+
+
+class CheckBoxFormFieldRegion(CheckBoxMixin, BaseFormFieldRegion):
+    """Checkbox field."""
+
+    _element_locator_str_suffix = 'input[type=checkbox]'
 
 
 class ChooseFileFormFieldRegion(BaseFormFieldRegion):
     """Choose file field."""
 
-    _element_locator = (by.By.CSS_SELECTOR, 'div > input[type=file]')
+    _element_locator_str_suffix = 'div > input[type=file]'
 
     def choose(self, path):
         self.element.send_keys(path)
@@ -115,48 +135,32 @@ class BaseTextFormFieldRegion(BaseFormFieldRegion):
 class TextInputFormFieldRegion(BaseTextFormFieldRegion):
     """Text input box."""
 
-    _element_locator = (by.By.CSS_SELECTOR, 'div > input[type=text],'
-                                            'div > input[type=None]')
-
-
-class FileInputFormFieldRegion(BaseFormFieldRegion):
-    """Text input box."""
-
-    _element_locator = (by.By.CSS_SELECTOR, 'div > input[type=file]')
-
-    @property
-    def path(self):
-        return self.element.text
-
-    @path.setter
-    def path(self, path):
-        # clear does not work on this kind of element
-        # because it is not user editable
-        self.element.send_keys(path)
+    _element_locator_str_suffix = \
+        'div > input[type=text], div > input[type=None]'
 
 
 class PasswordInputFormFieldRegion(BaseTextFormFieldRegion):
     """Password text input box."""
 
-    _element_locator = (by.By.CSS_SELECTOR, 'div > input[type=password]')
+    _element_locator_str_suffix = 'div > input[type=password]'
 
 
 class EmailInputFormFieldRegion(BaseTextFormFieldRegion):
     """Email text input box."""
 
-    _element_locator = (by.By.ID, 'id_email')
+    _element_locator_str_suffix = 'div > input[type=email]'
 
 
 class TextAreaFormFieldRegion(BaseTextFormFieldRegion):
     """Multi-line text input box."""
 
-    _element_locator = (by.By.CSS_SELECTOR, 'div > textarea')
+    _element_locator_str_suffix = 'div > textarea'
 
 
 class IntegerFormFieldRegion(BaseFormFieldRegion):
     """Integer input box."""
 
-    _element_locator = (by.By.CSS_SELECTOR, 'div > input[type=number]')
+    _element_locator_str_suffix = 'div > input[type=number]'
 
     @property
     def value(self):
@@ -170,15 +174,14 @@ class IntegerFormFieldRegion(BaseFormFieldRegion):
 class SelectFormFieldRegion(BaseFormFieldRegion):
     """Select box field."""
 
-    _element_locator = (by.By.CSS_SELECTOR, 'div > select')
+    _element_locator_str_suffix = 'div > select.form-control'
 
     def is_displayed(self):
         return self.element._el.is_displayed()
 
     @property
     def element(self):
-        select = self._get_element(*self._element_locator)
-        return Support.Select(select)
+        return Support.Select(self.src_elem)
 
     @property
     def values(self):
@@ -186,6 +189,17 @@ class SelectFormFieldRegion(BaseFormFieldRegion):
         for option in self.element.all_selected_options:
             results.append(option.get_attribute('value'))
         return results
+
+    @property
+    def options(self):
+        results = collections.OrderedDict()
+        for option in self.element.options:
+            results[option.get_attribute('value')] = option.text
+        return results
+
+    @property
+    def name(self):
+        return self.element._el.get_attribute('name')
 
     @property
     def text(self):
@@ -204,6 +218,67 @@ class SelectFormFieldRegion(BaseFormFieldRegion):
         self.element.select_by_value(value)
 
 
+class ThemableSelectFormFieldRegion(BaseFormFieldRegion):
+    """Select box field."""
+
+    _element_locator_str_suffix = 'div > .themable-select'
+    _raw_select_locator = (by.By.CSS_SELECTOR, 'select')
+    _selected_label_locator = (by.By.CSS_SELECTOR, '.dropdown-title')
+    _dropdown_menu_locator = (by.By.CSS_SELECTOR, 'ul.dropdown-menu > li > a')
+
+    def __init__(self, driver, conf, strict_options_match=True, **kwargs):
+        super(ThemableSelectFormFieldRegion, self).__init__(
+            driver, conf, **kwargs)
+        self.strict_options_match = strict_options_match
+
+    @property
+    def hidden_element(self):
+        elem = self._get_element(*self._raw_select_locator)
+        return SelectFormFieldRegion(self.driver, self.conf, src_elem=elem)
+
+    @property
+    def name(self):
+        return self.hidden_element.name
+
+    @property
+    def text(self):
+        return self._get_element(*self._selected_label_locator).text.strip()
+
+    @property
+    def value(self):
+        return self.hidden_element.value
+
+    @property
+    def options(self):
+        return self._get_elements(*self._dropdown_menu_locator)
+
+    @text.setter
+    def text(self, text):
+        if text != self.text:
+            self.src_elem.click()
+            for option in self.options:
+                if self.strict_options_match:
+                    match = text == option.text.strip()
+                else:
+                    match = option.text.startswith(text)
+                if match:
+                    option.click()
+                    return
+            raise ValueError('Widget "%s" does have an option with text "%s"'
+                             % (self.name, text))
+
+    @value.setter
+    def value(self, value):
+        if value != self.value:
+            self.src_elem.click()
+            for option in self.options:
+                if value == option.get_attribute('data-select-value'):
+                    option.click()
+                    return
+            raise ValueError('Widget "%s" does have an option with value "%s"'
+                             % (self.name, value))
+
+
 class BaseFormRegion(baseregion.BaseRegion):
     """Base class for forms."""
 
@@ -218,16 +293,24 @@ class BaseFormRegion(baseregion.BaseRegion):
         if src_elem is None:
             # fake self.src_elem must be set up in order self._get_element work
             self.src_elem = driver
-            src_elem = self._get_element(*self._default_form_locator)
+            # bind the topmost modal form in a modal stack
+            src_elem = self._get_elements(*self._default_form_locator)[-1]
         super(BaseFormRegion, self).__init__(driver, conf, src_elem)
 
     @property
-    def submit(self):
+    def _submit_element(self):
         return self._get_element(*self._submit_locator)
 
+    def submit(self):
+        self._submit_element.click()
+        self.wait_till_spinner_disappears()
+
     @property
-    def cancel(self):
+    def _cancel_element(self):
         return self._get_element(*self._cancel_locator)
+
+    def cancel(self):
+        self._cancel_element.click()
 
 
 class FormRegion(BaseFormRegion):
@@ -235,30 +318,39 @@ class FormRegion(BaseFormRegion):
 
     _header_locator = (by.By.CSS_SELECTOR, 'div.modal-header > h3')
     _side_info_locator = (by.By.CSS_SELECTOR, 'div.right')
-    _fields_locator = (by.By.CSS_SELECTOR, 'fieldset > div.form-group')
+    _fields_locator = (by.By.CSS_SELECTOR, 'fieldset')
 
     # private methods
-    def __init__(self, driver, conf, src_elem, form_field_names):
+    def __init__(self, driver, conf, src_elem=None, field_mappings=None):
         super(FormRegion, self).__init__(driver, conf, src_elem)
-        self.form_field_names = form_field_names
+        self.field_mappings = self._prepare_mappings(field_mappings)
+        self.wait_till_spinner_disappears()
         self._init_form_fields()
+
+    def _prepare_mappings(self, field_mappings):
+        if isinstance(field_mappings, tuple):
+            return {item: item for item in field_mappings}
+        else:
+            return field_mappings
 
     # protected methods
     def _init_form_fields(self):
-        self._init_dynamic_properties(self.form_field_names,
-                                      self._get_form_fields)
+        self.fields_src_elem = self._get_element(*self._fields_locator)
+        fields = self._get_form_fields()
+        for accessor_name, accessor_expr in self.field_mappings.items():
+            if isinstance(accessor_expr, six.string_types):
+                self._dynamic_properties[accessor_name] = fields[accessor_expr]
+            else:  # it is a class
+                self._dynamic_properties[accessor_name] = accessor_expr(
+                    self.driver, self.conf)
 
     def _get_form_fields(self):
-        fields_els = self._get_elements(*self._fields_locator)
-        form_fields = []
+        factory = FieldFactory(self.driver, self.conf, self.fields_src_elem)
         try:
             self._turn_off_implicit_wait()
-            for elem in fields_els:
-                field_factory = FieldFactory(self.driver, self.conf, elem)
-                form_fields.append(field_factory.make_form_field())
+            return {field.name: field for field in factory.fields()}
         finally:
             self._turn_on_implicit_wait()
-        return form_fields
 
     def set_field_values(self, data):
         """Set fields values
@@ -321,29 +413,39 @@ class TabbedFormRegion(FormRegion):
 
     _submit_locator = (by.By.CSS_SELECTOR, '*.btn.btn-primary[type=submit]')
     _side_info_locator = (by.By.CSS_SELECTOR, "td.help_text")
-    _fields_locator = (by.By.CSS_SELECTOR, "div.form-group")
 
-    class GetFieldsMethod(object):
+    def __init__(self, driver, conf, field_mappings=None, default_tab=0):
+        self.current_tab = default_tab
+        super(TabbedFormRegion, self).__init__(
+            driver, conf, field_mappings=field_mappings)
 
-        def __init__(self, get_fields_method, tab_index, switch_tab_method):
-            self.get_fields = get_fields_method
-            self.tab_index = tab_index
-            self.switch_to_tab = switch_tab_method
+    def _prepare_mappings(self, field_mappings):
+        return [super(TabbedFormRegion, self)._prepare_mappings(tab_mappings)
+                for tab_mappings in field_mappings]
 
-        def __call__(self, *args, **kwargs):
-            self.switch_to_tab(self.tab_index)
-            return [field for field in self.get_fields()
-                    if field.is_displayed()]
+    def _init_form_fields(self):
+        self.switch_to(self.current_tab)
+
+    def _init_tab_fields(self, tab_index):
+        fieldsets = self._get_elements(*self._fields_locator)
+        self.fields_src_elem = fieldsets[tab_index]
+        fields = self._get_form_fields()
+        current_tab_mappings = self.field_mappings[tab_index]
+        for accessor_name, accessor_expr in current_tab_mappings.items():
+            if isinstance(accessor_expr, six.string_types):
+                self._dynamic_properties[accessor_name] = fields[accessor_expr]
+            else:  # it is a class
+                self._dynamic_properties[accessor_name] = accessor_expr(
+                    self.driver, self.conf)
+
+    def switch_to(self, tab_index=0):
+        self.tabs.switch_to(index=tab_index)
+        self._init_tab_fields(tab_index)
 
     @property
     def tabs(self):
-        return menus.TabbedMenuRegion(self.driver, self.conf)
-
-    def _init_form_fields(self):
-        for index, tab_names in enumerate(self.form_field_names):
-            get_fields = self.GetFieldsMethod(self._get_form_fields, index,
-                                              self.tabs.switch_to)
-            self._init_dynamic_properties(tab_names, get_fields)
+        return menus.TabbedMenuRegion(self.driver, self.conf,
+                                      src_elem=self.src_elem)
 
 
 class DateFormRegion(BaseFormRegion):
@@ -365,10 +467,77 @@ class DateFormRegion(BaseFormRegion):
     def query(self, start, end):
         self._set_from_field(start)
         self._set_to_field(end)
-        self.submit.click()
+        self.submit()
 
     def _set_from_field(self, value):
         self._fill_field_element(value, self.from_date)
 
     def _set_to_field(self, value):
         self._fill_field_element(value, self.to_date)
+
+
+class MetadataFormRegion(BaseFormRegion):
+
+    _input_fields = (by.By.CSS_SELECTOR, 'div.input-group')
+    _custom_input_field = (by.By.XPATH, "//input[@name='customItem']")
+    _custom_input_button = (by.By.CSS_SELECTOR, 'span.input-group-btn > .btn')
+    _submit_locator = (by.By.CSS_SELECTOR, '.modal-footer > .btn.btn-primary')
+    _cancel_locator = (by.By.CSS_SELECTOR, '.modal-footer > .btn.btn-default')
+
+    def _form_getter(self):
+        return self.driver.find_element(*self._default_form_locator)
+
+    @property
+    def custom_field_value(self):
+        return self._get_element(*self._custom_input_field)
+
+    @property
+    def add_button(self):
+        return self._get_element(*self._custom_input_button)
+
+    def add_custom_field(self, field_name, field_value):
+        self.custom_field_value.send_keys(field_name)
+        self.add_button.click()
+        for div in self._get_elements(*self._input_fields):
+            if div.text in field_name:
+                field = div.find_element(by.By.CSS_SELECTOR, 'input')
+                if not hasattr(self, field_name):
+                    self._dynamic_properties[field_name] = field
+        self.set_field_value(field_name, field_value)
+
+    def set_field_value(self, field_name, field_value):
+        if hasattr(self, field_name):
+            field = getattr(self, field_name)
+            field.send_keys(field_value)
+        else:
+            raise AttributeError("Unknown form field '{}'.".format(field_name))
+
+    def wait_till_spinner_disappears(self):
+        # No spinner is invoked after the 'Save' button click
+        # Will wait till the form itself disappears
+        try:
+            self.wait_till_element_disappears(self._form_getter)
+        except exceptions.StaleElementReferenceException:
+            # The form might be absent already by the time the first check
+            # occurs. So just suppress the exception here.
+            pass
+
+
+class ItemTextDescription(baseregion.BaseRegion):
+
+    _separator_locator = (by.By.CSS_SELECTOR, 'dl.dl-horizontal')
+    _key_locator = (by.By.CSS_SELECTOR, 'dt')
+    _value_locator = (by.By.CSS_SELECTOR, 'dd')
+
+    def __init__(self, driver, conf, src=None):
+        super(ItemTextDescription, self).__init__(driver, conf, src)
+
+    def get_content(self):
+        keys = []
+        values = []
+        for section in self._get_elements(*self._separator_locator):
+            keys.extend([x.text for x in
+                         section.find_elements(*self._key_locator)])
+            values.extend([x.text for x in
+                           section.find_elements(*self._value_locator)])
+        return dict(zip(keys, values))
