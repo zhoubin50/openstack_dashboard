@@ -1,3 +1,4 @@
+# coding:utf-8
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -16,20 +17,21 @@ from openstack_dashboard.test.integration_tests.regions import forms
 from openstack_dashboard.test.integration_tests.regions import tables
 
 
-class UsageTable(tables.TableRegion):
-    name = 'project_usage'
-
-
 class OverviewPage(basepage.BaseNavigationPage):
+    _usage_table_locator = (by.By.ID, 'project_usage')
     _date_form_locator = (by.By.ID, 'date_form')
+
+    USAGE_TABLE_ACTIONS = ("download_csv",)
 
     def __init__(self, driver, conf):
         super(OverviewPage, self).__init__(driver, conf)
-        self._page_title = 'Instance Overview'
+        self._page_title = u'云主机概况'
 
     @property
     def usage_table(self):
-        return UsageTable(self.driver, self.conf)
+        src_elem = self._get_element(*self._usage_table_locator)
+        return tables.ActionsTableRegion(self.driver, self.conf, src_elem,
+                                         self.USAGE_TABLE_ACTIONS)
 
     @property
     def date_form(self):

@@ -1,3 +1,4 @@
+# coding:utf-8
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -11,13 +12,7 @@
 #    under the License.
 
 import importlib
-import json
 import types
-
-from selenium.webdriver.common import by
-import six
-
-from openstack_dashboard.test.integration_tests import config
 
 
 class Navigation(object):
@@ -49,18 +44,10 @@ class Navigation(object):
     MAX_SUB_LEVEL = 4
     MIN_SUB_LEVEL = 2
     SIDE_MENU_MAX_LEVEL = 3
+    PAGES_IMPORT_PATH = "openstack_dashboard.test.integration_tests.pages.%s"
+    ITEMS = "__items__"
 
-    CONFIG = config.get_config()
-    PAGES_IMPORT_PATH = [
-        "openstack_dashboard.test.integration_tests.pages.%s"
-    ]
-    if CONFIG.plugin.is_plugin and CONFIG.plugin.plugin_page_path:
-        for path in CONFIG.plugin.plugin_page_path:
-            PAGES_IMPORT_PATH.append(path + ".%s")
-
-    ITEMS = "_"
-
-    CORE_PAGE_STRUCTURE = \
+    PAGE_STRUCTURE = \
         {
             "Project":
                 {
@@ -106,6 +93,21 @@ class Navigation(object):
                                 (
                                     "Containers",
                                 )
+                        },
+                    "Data Processing":
+                        {
+                            ITEMS:
+                                (
+                                    "Clusters",
+                                    "Cluster Templates",
+                                    "Node Group Templates",
+                                    "Job Executions",
+                                    "Jobs",
+                                    "Job Binaries",
+                                    "Data Sources",
+                                    "Image Registry",
+                                    "Plugins"
+                                ),
                         },
                     "Orchestration":
                         {
@@ -156,10 +158,7 @@ class Navigation(object):
                                     "Flavors",
                                     "Images",
                                     "Networks",
-                                    "Routers",
-                                    "Defaults",
-                                    "Metadata Definitions",
-                                    "System Information"
+                                    "Routers"
                                 )
                         },
                 },
@@ -183,7 +182,66 @@ class Navigation(object):
                         )
                 }
         }
-    _main_content_locator = (by.By.ID, 'content_body')
+
+    TRANSLATE_DICT = {"Project": u'项目',
+                      "Compute": u'Compute',
+                      "Access & Security": u'访问 & 安全',
+                      "Security Groups": u'',
+                      "Key Pairs": u'',
+                      "Floating IPs": u'',
+                      "API Access": u'',
+                      "Volumes": u'',
+                      "Volume Snapshots": u'',
+                      "Overview": u'',
+                      "Instances": u'',
+                      "Images": u'镜像',
+                      "Network": u'网络',
+                      "Network Topology": u'',
+                      "Networks": u'网络',
+                      "Routers": u'',
+                      "Object Store": u'',
+                      "Containers": u'',
+                      "Data Processing": u'',
+                      "Clusters": u'',
+                      "Cluster Templates": u'',
+                      "Node Group Templates": u'',
+                      "Job Executions": u'',
+                      "Jobs": u'',
+                      "Job Binaries": u'',
+                      "Data Sources": u'',
+                      "Image Registry": u'',
+                      "Plugins": u'',
+                      "Orchestration": u'',
+                      "Stacks": u'',
+                      "Admin": u'',
+                      "System": u'',
+                      "Resource Usage": u'',
+                      "Daily Report": u'',
+                      "Stats": u'',
+                      "System info": u'',
+                      "Services": u'',
+                      "Compute Services": u'',
+                      "Block Storage Services": u'',
+                      "Network Agents": u'',
+                      "Default Quotas": u'',
+                      "Volume Types": u'',
+                      "Hypervisors": u'',
+                      "Host Aggregates": u'',
+                      "Flavors": u'',
+                      "Settings": u'',
+                      "User Settings": u'',
+                      "Change Password": u'',
+                      "Identity": u'',
+                      "Projects": u'',
+                      "Users": u'',
+                      "Groups": u'',
+                      "Domains": u'',
+                      "Roles": u'',}
+
+    # 将英语翻译成中文
+    @classmethod
+    def _eng_to_chs(cls, word):
+        return cls.TRANSLATE_DICT[word]
 
     # protected methods
     def _go_to_page(self, path, page_class=None):
@@ -207,7 +265,13 @@ class Navigation(object):
                 self._go_to_side_menu_page([path[0], None, path[1]])
         else:
             # side menu contains only three sub-levels
-            self._go_to_side_menu_page(path[:self.SIDE_MENU_MAX_LEVEL])
+            # 英语使用这个
+            # self._go_to_side_menu_page(path[:self.SIDE_MENU_MAX_LEVEL])
+            # 中文使用这个
+            menu_items = []
+            for i in path[:self.SIDE_MENU_MAX_LEVEL]:
+                menu_items.append(Navigation._eng_to_chs(i))
+            self._go_to_side_menu_page(menu_items)
 
         if path_len == self.MAX_SUB_LEVEL:
             # apparently there is tabbed menu,
@@ -218,8 +282,7 @@ class Navigation(object):
         return self._get_page_class(path, page_class)(self.driver, self.conf)
 
     def _go_to_tab_menu_page(self, item_text):
-        content_body = self.driver.find_element(*self._main_content_locator)
-        content_body.find_element_by_link_text(item_text).click()
+        self.driver.find_element_by_link_text(item_text).click()
 
     def _go_to_settings_page(self, item_text):
         """Go to page that is located under the settings tab."""
@@ -253,18 +316,9 @@ class Navigation(object):
 
         page_cls_name = page_cls_name or self._get_page_cls_name(final_module)
 
-        module = None
         # return imported class
-        for path in self.PAGES_IMPORT_PATH:
-            try:
-                module = importlib.import_module(path %
-                                                 page_cls_path)
-                break
-            except ImportError:
-                pass
-        if module is None:
-            raise ImportError("Failed to import module: " +
-                              (path % page_cls_path))
+        module = importlib.import_module(self.PAGES_IMPORT_PATH %
+                                         page_cls_path)
         return getattr(module, page_cls_name)
 
     class GoToMethodFactory(object):
@@ -289,13 +343,11 @@ class Navigation(object):
 
             * consist of 'go_to_subsubmenu_menuitem_page'
             """
-            if len(self.path) < 4:
-                path_2_name = list(self.path[-2:])
-            else:
-                path_2_name = list(self.path[-3:])
+            submenu, menu_item = self.path[-2:]
 
-            name = self.METHOD_NAME_DELIMITER.join(path_2_name)
-            name = self.METHOD_NAME_PREFIX + name + self.METHOD_NAME_SUFFIX
+            name = "".join((self.METHOD_NAME_PREFIX, submenu,
+                            self.METHOD_NAME_DELIMITER, menu_item,
+                            self.METHOD_NAME_SUFFIX))
             name = Navigation.unify_page_path(name, preserve_spaces=False)
             return name
 
@@ -311,19 +363,15 @@ class Navigation(object):
 
         def rec(items, sub_menus):
             if isinstance(items, dict):
-                for sub_menu, sub_item in six.iteritems(items):
+                for sub_menu, sub_item in items.iteritems():
                     rec(sub_item, sub_menus + (sub_menu,))
-            elif isinstance(items, (list, tuple)):
+            elif isinstance(items, tuple):
                 # exclude ITEMS element from sub_menus
                 paths = (sub_menus[:-1] + (menu_item,) for menu_item in items)
                 for path in paths:
                     cls._create_go_to_method(path)
 
-        rec(cls.CORE_PAGE_STRUCTURE, ())
-        plugin_page_structure_strings = cls.CONFIG.plugin.plugin_page_structure
-        for plugin_ps_string in plugin_page_structure_strings:
-            plugin_page_structure = json.loads(plugin_ps_string)
-            rec(plugin_page_structure, ())
+        rec(cls.PAGE_STRUCTURE, ())
 
     @classmethod
     def _create_go_to_method(cls, path, class_name=None):

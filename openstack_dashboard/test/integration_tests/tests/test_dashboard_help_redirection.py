@@ -10,14 +10,20 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from selenium.webdriver.common import by
-
-from openstack_dashboard.test.integration_tests.regions import baseregion
+from openstack_dashboard.test.integration_tests import helpers
 
 
-class ErrorMessageRegion(baseregion.BaseRegion):
+class TestDashboardHelp(helpers.TestCase):
 
-    _close_locator = (by.By.CSS_SELECTOR, 'a.close')
+    def test_dashboard_help_redirection(self):
+        """Verifies Help link redirects to the right URL."""
 
-    def close(self):
-        self._get_element(*self._close_locator).click()
+        self.home_pg.go_to_help_page()
+        self.home_pg.switch_window()
+
+        self.assertEqual(self.CONFIG.dashboard.help_url,
+                         self.home_pg.get_url_current_page(),
+                         "help link did not redirect to the right URL")
+
+        self.home_pg.close_window()
+        self.home_pg.switch_window()

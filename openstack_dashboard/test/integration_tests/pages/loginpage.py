@@ -1,3 +1,4 @@
+# coding:utf-8
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -24,12 +25,12 @@ class LoginPage(pageobject.PageObject):
     _login_username_field_locator = (by.By.ID, 'id_username')
     _login_password_field_locator = (by.By.ID, 'id_password')
     _login_submit_button_locator = (by.By.CSS_SELECTOR,
-                                    'div.panel-footer button.btn')
+                                    'div.modal-footer button.btn')
     _login_logout_reason_locator = (by.By.ID, 'logout_reason')
 
     def __init__(self, driver, conf):
         super(LoginPage, self).__init__(driver, conf)
-        self._page_title = "Login"
+        self._page_title = u"登录"
 
     def is_login_page(self):
         return (self.is_the_current_page() and
